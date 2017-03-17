@@ -17,7 +17,7 @@ The following options are recognized:
 -h     - show this help text.
 
 Author:
-    Geir Arne Hjelle, <geir.arne.hjelle@kartverket.no>.
+    Geir Arne Hjelle, <geirarne@gmail.com>.
 
 """
 from configparser import ConfigParser
@@ -92,7 +92,7 @@ def run_continuously(filename, timestamp=None):
 def read_converters():
     base_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
     config_path = os.path.join(base_dir, 'config', 'markit.conf')
-    print(config_path)
+#    print(config_path)
     config = ConfigParser()
     config.read(config_path)
 
