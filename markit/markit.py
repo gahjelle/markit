@@ -15,6 +15,7 @@ The following options are recognized:
 
 -c     - continuous run, update whenever the markdown file changes.
 -h     - show this help text.
+-V     - verbose output
 
 Author:
     Geir Arne Hjelle, <geirarne@gmail.com>.
@@ -51,31 +52,43 @@ def main():
 
     if 'c' in options:
         try:
-            run_continuously(arguments[0])
+            run_continuously(arguments[0], verbose='V' in options)
         except KeyboardInterrupt:
             sys.exit(0)
 
-    markdown_to_other(arguments[0])
+    markdown_to_other(arguments[0], 'V' in options)
 
 
-def markdown_to_other(filename):
+def markdown_to_other(filename, verbose=False):
     """Use pandoc to convert filename from markdown to other outputs.
     """
     for name, converter in CONVERTERS.items():
         if converter is None:
             continue
+
+        stdin = None
+        for command in converter.get('first', dict()):
+            cmd = [s.format(infile=filename) for s in command]
+            print('First running "{}" for {}'.format(' '.join(cmd), name))
+            process = subprocess.run(cmd, stdout=subprocess.PIPE)
+            stdin = process.stdout
+
         outfile = os.path.splitext(filename)[0] + '.' + converter['extension']
+        cmd = PANDOC + converter['command'] + ['-o', outfile]
+        if not stdin:
+            cmd += [filename]
+        if verbose:
+            print(' '.join(cmd))
         print('Writing {} to {}'.format(name.title(), outfile))
-        subprocess.call(PANDOC + converter['command'] + ['-o', outfile, filename])
+        subprocess.run(cmd, input=stdin)
 
-        if 'also' in converter:
-            for command in converter['also']:
-                cmd = [s.format(outfile=outfile) for s in command]
-                print('Also running {} for {}'.format(' '.join(cmd), name))
-                subprocess.call(cmd)
+        for command in converter.get('also', dict()):
+            cmd = [s.format(outfile=outfile) for s in command]
+            print('Also running "{}" for {}'.format(' '.join(cmd), name))
+            subprocess.run(cmd)
 
 
-def run_continuously(filename, timestamp=None):
+def run_continuously(filename, timestamp=None, verbose=False):
     if timestamp:
         print('\nWatching for updates to {}. Use Ctrl-C to stop.\n'.format(filename))
 
@@ -85,14 +98,13 @@ def run_continuously(filename, timestamp=None):
             break
         time.sleep(0.5)
 
-    markdown_to_other(filename)
-    return run_continuously(filename, timestamp=current_timestamp)
+    markdown_to_other(filename, verbose=verbose)
+    return run_continuously(filename, timestamp=current_timestamp, verbose=verbose)
 
 
 def read_converters():
     base_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
     config_path = os.path.join(base_dir, 'config', 'markit.conf')
-#    print(config_path)
     config = ConfigParser()
     config.read(config_path)
 
@@ -100,6 +112,8 @@ def read_converters():
         CONVERTERS.setdefault(converter, dict())
         CONVERTERS[converter]['extension'] = config[converter]['extension']
         CONVERTERS[converter]['command'] = config[converter]['command'].split()
+        if 'first' in config[converter]:
+            CONVERTERS[converter]['first'] = [c.split() for c in config[converter]['first'].split(';')]
         if 'also' in config[converter]:
             CONVERTERS[converter]['also'] = [c.split() for c in config[converter]['also'].split(';')]
 
